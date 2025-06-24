@@ -69,6 +69,35 @@ def update_password(user_id, new_password):
     supabase.table("users").update({"password": new_password}).eq("id", user_id).execute()
     st.success("Password updated successfully.")
 
+def get_billing_range(month_range):
+    today = datetime.today()
+    year = today.year
+    ranges = {
+        "December-January": ((12, 14), (1, 13)),
+        "January-February": ((1, 14), (2, 13)),
+        "February-March": ((2, 14), (3, 13)),
+        "March-April": ((3, 14), (4, 13)),
+        "April-May": ((4, 14), (5, 13)),
+        "May-June": ((5, 14), (6, 13)),
+        "June-July": ((6, 14), (7, 13)),
+        "July-August": ((7, 14), (8, 13)),
+        "August-September": ((8, 14), (9, 13)),
+        "September-October": ((9, 14), (10, 13)),
+        "October-November": ((10, 14), (11, 13)),
+        "November-December": ((11, 14), (12, 13)),
+    }
+
+    (start_month, start_day), (end_month, end_day) = ranges[month_range]
+
+    # Handle year rollover
+    start_year = year if start_month <= today.month else year - 1
+    end_year = year if end_month >= start_month else year + 1 if start_month == 12 else year
+
+    start = datetime(start_year, start_month, start_day)
+    end = datetime(end_year, end_month, end_day)
+    return start, end
+
+
 def export_pdf(user, transactions):
     pdf = FPDF()
     pdf.add_page()
@@ -156,8 +185,25 @@ if email and password:
             with tabs[2]:
                 sub_users = get_sub_users(user['id'])
                 selected = st.selectbox("Select Sub-User to View", sub_users, format_func=lambda x: x['name'])
+                month_option = st.selectbox("Select Month", [
+                    "December-January", "January-February", "February-March", "March-April",
+                    "April-May", "May-June", "June-July", "July-August",
+                    "August-September", "September-October", "October-November", "November-December"
+                ])
+
+                start_date, end_date = get_billing_range(month_option)
+                st.write(f"📅 Showing transactions from **{start_date.date()}** to **{end_date.date()}**")
+
                 transactions = get_transactions(selected['id'])
-                st.dataframe(transactions, use_container_width=True)
+                filtered = [
+                    t for t in transactions
+                    if start_date <= datetime.fromisoformat(t['timestamp']) <= end_date
+                ]
+
+                st.dataframe(filtered, use_container_width=True)
+
+                if st.button("Download PDF Statement"):
+                    export_pdf(selected, filtered)
 
             with tabs[3]:
                 sub_users = get_sub_users(user['id'])
